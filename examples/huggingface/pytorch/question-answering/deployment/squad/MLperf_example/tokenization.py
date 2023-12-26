@@ -54,17 +54,18 @@ def validate_case_matches_checkpoint(do_lower_case, init_checkpoint):
 
     model_name = m.group(1)
 
-    lower_models = [
-        "uncased_L-24_H-1024_A-16", "uncased_L-12_H-768_A-12",
-        "multilingual_L-12_H-768_A-12", "chinese_L-12_H-768_A-12"
-    ]
-
     cased_models = [
         "cased_L-12_H-768_A-12", "cased_L-24_H-1024_A-16",
         "multi_cased_L-12_H-768_A-12"
     ]
 
     is_bad_config = False
+    lower_models = [
+        "uncased_L-24_H-1024_A-16",
+        "uncased_L-12_H-768_A-12",
+        "multilingual_L-12_H-768_A-12",
+        "chinese_L-12_H-768_A-12",
+    ]
     if model_name in lower_models and not do_lower_case:
         is_bad_config = True
         actual_flag = "False"
@@ -79,12 +80,8 @@ def validate_case_matches_checkpoint(do_lower_case, init_checkpoint):
 
     if is_bad_config:
         raise ValueError(
-            "You passed in `--do_lower_case=%s` with `--init_checkpoint=%s`. "
-            "However, `%s` seems to be a %s model, so you "
-            "should pass in `--do_lower_case=%s` so that the fine-tuning matches "
-            "how the model was pre-training. If this error is wrong, please "
-            "just comment out this check." % (actual_flag, init_checkpoint,
-                                        model_name, case_name, opposite_flag))
+            f"You passed in `--do_lower_case={actual_flag}` with `--init_checkpoint={init_checkpoint}`. However, `{model_name}` seems to be a {case_name} model, so you should pass in `--do_lower_case={opposite_flag}` so that the fine-tuning matches how the model was pre-training. If this error is wrong, please just comment out this check."
+        )
 
 
 
@@ -95,7 +92,7 @@ def convert_to_unicode(text):
     elif isinstance(text, bytes):
         return text.decode("utf-8", "ignore")
     else:
-        raise ValueError("Unsupported string type: %s" % (type(text)))
+        raise ValueError(f"Unsupported string type: {type(text)}")
 
 
 def printable_text(text):
@@ -108,7 +105,7 @@ def printable_text(text):
     elif isinstance(text, bytes):
         return text.decode("utf-8", "ignore")
     else:
-        raise ValueError("Unsupported string type: %s" % (type(text)))
+        raise ValueError(f"Unsupported string type: {type(text)}")
 
 
 def load_vocab(vocab_file):
@@ -128,19 +125,13 @@ def load_vocab(vocab_file):
 
 def convert_by_vocab(vocab, items):
     """Converts a sequence of [tokens|ids] using the vocab."""
-    output = []
-    for item in items:
-        output.append(vocab[item])
-    return output
+    return [vocab[item] for item in items]
 
 
 def whitespace_tokenize(text):
     """Runs basic whitespace cleaning and splitting on a peice of text."""
     text = text.strip()
-    if not text:
-        return []
-    tokens = text.split()
-    return tokens
+    return [] if not text else text.split()
 
 
 class FullTokenizer(object):
@@ -155,9 +146,7 @@ class FullTokenizer(object):
     def tokenize(self, text):
         split_tokens = []
         for token in self.basic_tokenizer.tokenize(text):
-            for sub_token in self.wordpiece_tokenizer.tokenize(token):
-                split_tokens.append(sub_token)
-
+            split_tokens.extend(iter(self.wordpiece_tokenizer.tokenize(token)))
         return split_tokens
 
     def convert_tokens_to_ids(self, tokens):
@@ -173,8 +162,8 @@ class BertTokenizer(object):
     def __init__(self, vocab_file, do_lower_case=True):
         if not os.path.isfile(vocab_file):
             raise ValueError(
-                "Can't find a vocabulary file at path '{}'. To load the vocabulary from a Google pretrained "
-                "model use `tokenizer = BertTokenizer.from_pretrained(PRETRAINED_MODEL_NAME)`".format(vocab_file))
+                f"Can't find a vocabulary file at path '{vocab_file}'. To load the vocabulary from a Google pretrained model use `tokenizer = BertTokenizer.from_pretrained(PRETRAINED_MODEL_NAME)`"
+            )
         self.vocab = load_vocab(vocab_file)
         self.ids_to_tokens = collections.OrderedDict(
             [(ids, tok) for tok, ids in self.vocab.items()])
@@ -184,23 +173,16 @@ class BertTokenizer(object):
     def tokenize(self, text):
         split_tokens = []
         for token in self.basic_tokenizer.tokenize(text):
-            for sub_token in self.wordpiece_tokenizer.tokenize(token):
-                split_tokens.append(sub_token)
+            split_tokens.extend(iter(self.wordpiece_tokenizer.tokenize(token)))
         return split_tokens
 
     def convert_tokens_to_ids(self, tokens):
         """Converts a sequence of tokens into ids using the vocab."""
-        ids = []
-        for token in tokens:
-            ids.append(self.vocab[token])
-        return ids
+        return [self.vocab[token] for token in tokens]
 
     def convert_ids_to_tokens(self, ids):
         """Converts a sequence of ids in wordpiece tokens using the vocab."""
-        tokens = []
-        for i in ids:
-            tokens.append(self.ids_to_tokens[i])
-        return tokens
+        return [self.ids_to_tokens[i] for i in ids]
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name, do_lower_case=True):
@@ -217,20 +199,17 @@ class BertTokenizer(object):
             resolved_vocab_file = cached_path(vocab_file)
             if resolved_vocab_file == vocab_file:
 
-                logger.info("loading vocabulary file {}".format(vocab_file))
+                logger.info(f"loading vocabulary file {vocab_file}")
             else:
-                logger.info("loading vocabulary file {} from cache at {}".format(
-                    vocab_file, resolved_vocab_file))
+                logger.info(
+                    f"loading vocabulary file {vocab_file} from cache at {resolved_vocab_file}"
+                )
             # Instantiate tokenizer.
             tokenizer = cls(resolved_vocab_file, do_lower_case)
         except FileNotFoundError:
             logger.error(
-                "Model name '{}' was not found in model name list ({}). "
-                "We assumed '{}' was a path or url but couldn't find any file "
-                "associated to this path or url.".format(
-                    pretrained_model_name,
-                    ', '.join(PRETRAINED_VOCAB_ARCHIVE_MAP.keys()),
-                    pretrained_model_name))
+                f"Model name '{pretrained_model_name}' was not found in model name list ({', '.join(PRETRAINED_VOCAB_ARCHIVE_MAP.keys())}). We assumed '{pretrained_model_name}' was a path or url but couldn't find any file associated to this path or url."
+            )
             tokenizer = None
         return tokenizer
 
@@ -264,8 +243,7 @@ class BasicTokenizer(object):
                 token = self._run_strip_accents(token)
             split_tokens.extend(self._run_split_on_punc(token))
 
-        output_tokens = whitespace_tokenize(" ".join(split_tokens))
-        return output_tokens
+        return whitespace_tokenize(" ".join(split_tokens))
 
     def _run_strip_accents(self, text):
         """Strips accents from a piece of text."""
@@ -304,9 +282,7 @@ class BasicTokenizer(object):
         for char in text:
             cp = ord(char)
             if self._is_chinese_char(cp):
-                output.append(" ")
-                output.append(char)
-                output.append(" ")
+                output.extend((" ", char, " "))
             else:
                 output.append(char)
         return "".join(output)
@@ -321,17 +297,16 @@ class BasicTokenizer(object):
         # as is Japanese Hiragana and Katakana. Those alphabets are used to write
         # space-separated words, so they are not treated specially and handled
         # like the all of the other languages.
-        if ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
-                (cp >= 0x3400 and cp <= 0x4DBF) or  #
-                (cp >= 0x20000 and cp <= 0x2A6DF) or  #
-                (cp >= 0x2A700 and cp <= 0x2B73F) or  #
-                (cp >= 0x2B740 and cp <= 0x2B81F) or  #
-                (cp >= 0x2B820 and cp <= 0x2CEAF) or
-                (cp >= 0xF900 and cp <= 0xFAFF) or  #
-                (cp >= 0x2F800 and cp <= 0x2FA1F)):  #
-            return True
-
-        return False
+        return (
+            (cp >= 0x4E00 and cp <= 0x9FFF)
+            or (cp >= 0x3400 and cp <= 0x4DBF)
+            or (cp >= 0x20000 and cp <= 0x2A6DF)
+            or (cp >= 0x2A700 and cp <= 0x2B73F)
+            or (cp >= 0x2B740 and cp <= 0x2B81F)
+            or (cp >= 0x2B820 and cp <= 0x2CEAF)
+            or (cp >= 0xF900 and cp <= 0xFAFF)
+            or (cp >= 0x2F800 and cp <= 0x2FA1F)
+        )
 
     def _clean_text(self, text):
         """Performs invalid character removal and whitespace cleanup on text."""
@@ -387,7 +362,7 @@ class WordpieceTokenizer(object):
                 while start < end:
                     substr = "".join(chars[start:end])
                     if start > 0:
-                        substr = "##" + substr
+                        substr = f"##{substr}"
                     if substr in self.vocab:
                         cur_substr = substr
                         break
@@ -409,24 +384,20 @@ def _is_whitespace(char):
     """Checks whether `chars` is a whitespace character."""
     # \t, \n, and \r are technically contorl characters but we treat them
     # as whitespace since they are generally considered as such.
-    if char == " " or char == "\t" or char == "\n" or char == "\r":
+    if char in [" ", "\t", "\n", "\r"]:
         return True
     cat = unicodedata.category(char)
-    if cat == "Zs":
-        return True
-    return False
+    return cat == "Zs"
 
 
 def _is_control(char):
     """Checks whether `chars` is a control character."""
     # These are technically control characters but we count them as whitespace
     # characters.
-    if char == "\t" or char == "\n" or char == "\r":
+    if char in ["\t", "\n", "\r"]:
         return False
     cat = unicodedata.category(char)
-    if cat.startswith("C"):
-        return True
-    return False
+    return bool(cat.startswith("C"))
 
 
 def _is_punctuation(char):
@@ -440,6 +411,4 @@ def _is_punctuation(char):
             (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126)):
         return True
     cat = unicodedata.category(char)
-    if cat.startswith("P"):
-        return True
-    return False
+    return bool(cat.startswith("P"))
