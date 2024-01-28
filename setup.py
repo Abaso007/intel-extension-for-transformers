@@ -40,7 +40,7 @@ def get_gpu_family():
 
 def check_env_flag(name: str, default: bool = False) -> bool:
     if default:  # if a flag meant to be true if not set / mal-formatted
-        return not os.getenv(name, "").upper() in ["OFF", "0", "FALSE", "NO", "N"]
+        return os.getenv(name, "").upper() not in ["OFF", "0", "FALSE", "NO", "N"]
     else:
         return os.getenv(name, "").upper() in ["ON", "1", "TRUE", "YES", "Y"]
 
@@ -81,13 +81,17 @@ if not SKIP_RUNTIME:
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
-# define install requirements
-install_requires_list = ['packaging', 'numpy', 'schema', 'pyyaml']
 opt_install_requires_list = ['neural_compressor', 'transformers']
 
 
 packages_list = find_packages()
-install_requires_list.extend(opt_install_requires_list)
+install_requires_list = [
+    'packaging',
+    'numpy',
+    'schema',
+    'pyyaml',
+    *opt_install_requires_list,
+]
 
 
 class CMakeExtension(Extension):
@@ -111,9 +115,7 @@ class CMakeBuild(build_ext):
             return True
         if file_name.endswith(".so") or ".so." in file_name:
             return True
-        if sys.platform == "linux" and ('.' not in file_name):
-            return True
-        return False
+        return sys.platform == "linux" and '.' not in file_name
 
     @staticmethod
     def _get_files(scope: str, repo: str):
@@ -121,8 +123,14 @@ class CMakeBuild(build_ext):
         files = [os.path.join(repo, f) for f in subprocess.check_output(
                 ["git", "ls-files", "--", scope], cwd=repo
         ).decode("utf-8").splitlines()]
-        submodules = subprocess.check_output(
-            ["git", "submodule", "--quiet", "foreach", f'echo $sm_path'], cwd=repo).decode("utf-8").splitlines()
+        submodules = (
+            subprocess.check_output(
+                ["git", "submodule", "--quiet", "foreach", 'echo $sm_path'],
+                cwd=repo,
+            )
+            .decode("utf-8")
+            .splitlines()
+        )
         for sm in submodules:
             sm_path = os.path.join(repo, sm)
             files.extend(CMakeBuild._get_files(sm_path, sm_path))
